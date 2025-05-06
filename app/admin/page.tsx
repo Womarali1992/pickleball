@@ -3,26 +3,38 @@
 import React, { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   saveCourts, 
-  getCourts, 
+  getCourts,
+  loadCourts,
+  defaultCourts,
   reservations as mockReservations, 
-  timeSlots, 
+  generateTimeSlots,
   specialTimeSlots 
 } from "@/lib/data";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay, startOfDay, addDays, subDays } from "date-fns";
-import { Users, Calendar, Settings, Clock, BarChart3, ChevronLeft, ChevronRight } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Users, Calendar, Settings, Clock, BarChart3, ChevronLeft, ChevronRight, Search, Plus, Star, Edit2, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import EditCourtForm from "@/components/EditCourtForm";
 import ScheduleCourtForm from "@/components/ScheduleCourtForm";
 import SchedulerChart from "@/components/SchedulerChart";
 import DateDetailModal from "@/components/DateDetailModal";
 import DayScheduleView from "@/components/DayScheduleView";
 import { dbService } from "@/lib/db-service";
+import { Table, TableHeader, TableBody, TableCell, TableHead, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { userDb } from '@/lib/db';
+import { User, Court, Reservation, Coach, Clinic, TimeSlot } from '@/lib/types';
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { coachDb } from '@/lib/db';
+import CoachManagement from "@/components/coaches/CoachManagement";
+import ClinicManagement from "@/components/coaches/ClinicManagement";
 
 export default function AdminPage() {
   const [editingCourt, setEditingCourt] = useState<any>(null);
@@ -30,38 +42,103 @@ export default function AdminPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [reservationDate, setReservationDate] = useState<Date>(startOfDay(new Date()));
   const [currentViewDate, setCurrentViewDate] = useState<Date>(startOfDay(new Date()));
-  const [courtsList, setCourtsList] = useState(getCourts());
+  const [courtsList, setCourtsList] = useState(defaultCourts);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showReservationDetails, setShowReservationDetails] = useState(false);
   const [selectedReservations, setSelectedReservations] = useState<any[]>([]);
   const [reservations, setReservations] = useState(mockReservations);
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+  const [slotsByDate, setSlotsByDate] = useState<Record<string, TimeSlot[]>>({});
   const [slotFilter, setSlotFilter] = useState<'all' | 'booked' | 'available'>('all');
   const [activeTab, setActiveTab] = useState<string>("scheduler");
   const [highlightDate, setHighlightDate] = useState<boolean>(false);
+  const [users, setUsers] = useState<User[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [newUser, setNewUser] = useState<Partial<User>>({
+    name: '',
+    email: '',
+    duprRating: 0,
+    phoneNumber: '',
+    skillLevel: 'beginner',
+    membershipStatus: 'pending',
+  });
+  const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [selectedCoach, setSelectedCoach] = useState<Coach | null>(null);
+  const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
+  const [isCoachModalOpen, setIsCoachModalOpen] = useState(false);
+  const [isClinicModalOpen, setIsClinicModalOpen] = useState(false);
+  const [newCoach, setNewCoach] = useState<Partial<Coach>>({
+    name: '',
+    email: '',
+    phoneNumber: '',
+    bio: '',
+    specialties: []
+  });
+  const [showAddCoachModal, setShowAddCoachModal] = useState(false);
+  const [isClient, setIsClient] = useState(false);
   
-  // Add an effect to refresh courts and reservations when needed
   useEffect(() => {
-    setCourtsList(getCourts());
+    setIsClient(true);
+    const loadedCourts = loadCourts();
+    setCourtsList(loadedCourts);
     
-    // Combine mock reservations with custom reservations from dbService
+    const generatedTimeSlots = generateTimeSlots(loadedCourts);
+    
+    const filteredTimeSlots = generatedTimeSlots.filter(slot => {
+      return !specialTimeSlots.some(specialSlot => 
+        specialSlot.courtId === slot.courtId && 
+        specialSlot.date === slot.date && 
+        (specialSlot.startTime === slot.startTime || 
+         parseInt(specialSlot.startTime) === parseInt(slot.startTime))
+      );
+    });
+    
+    const combinedTimeSlots = [
+      ...filteredTimeSlots,
+      ...specialTimeSlots
+    ];
+    
+    setTimeSlots(combinedTimeSlots);
+  }, []);
+  
+  useEffect(() => {
+    const newSlotsByDate: Record<string, TimeSlot[]> = {};
+    
+    timeSlots.forEach(slot => {
+      if (!newSlotsByDate[slot.date]) {
+        newSlotsByDate[slot.date] = [];
+      }
+      newSlotsByDate[slot.date].push(slot);
+    });
+    
+    Object.keys(newSlotsByDate).forEach(date => {
+      newSlotsByDate[date].sort((a, b) => {
+        return a.startTime.localeCompare(b.startTime);
+      });
+    });
+    
+    setSlotsByDate(newSlotsByDate);
+  }, [timeSlots]);
+
+  useEffect(() => {
     const customReservations = dbService.getCustomReservations();
     console.log('Custom reservations from dbService:', customReservations);
     
-    // Remove duplicates by timeSlotId (prefer custom reservations)
     const combinedReservations = [...mockReservations];
     
     customReservations.forEach(customRes => {
-      // Check if we already have this reservation
       const existingIndex = combinedReservations.findIndex(res => 
         res.timeSlotId === customRes.timeSlotId
       );
       
       if (existingIndex >= 0) {
-        // Replace existing reservation with custom one
         combinedReservations[existingIndex] = customRes;
       } else {
-        // Add new reservation
         combinedReservations.push(customRes);
       }
     });
@@ -69,45 +146,88 @@ export default function AdminPage() {
     setReservations(combinedReservations);
   }, []);
   
+  useEffect(() => {
+    const loadUsers = () => {
+      const allUsers = userDb.getAllUsers();
+      setUsers(allUsers);
+    };
+    loadUsers();
+  }, []);
+  
+  useEffect(() => {
+    const loadCoaches = () => {
+      const allCoaches = coachDb.getAllCoaches();
+      setCoaches(allCoaches);
+    };
+    loadCoaches();
+  }, []);
+  
   const handleEditCourt = (courtData: any) => {
     console.log("Editing court:", courtData);
-    // Update the court in the local state
     const updatedCourts = courtsList.map(court => 
       court.id === courtData.id ? courtData : court
     );
     setCourtsList(updatedCourts);
-    // Save the updated courts to localStorage
     const saveSuccess = saveCourts(updatedCourts);
     if (!saveSuccess) {
-      // If save fails, try again after a short delay
       setTimeout(() => {
         saveCourts(updatedCourts);
       }, 500);
     }
+    
+    const generatedTimeSlots = generateTimeSlots(updatedCourts);
+    
+    const filteredTimeSlots = generatedTimeSlots.filter(slot => {
+      return !specialTimeSlots.some(specialSlot => 
+        specialSlot.courtId === slot.courtId && 
+        specialSlot.date === slot.date && 
+        (specialSlot.startTime === slot.startTime || 
+         parseInt(specialSlot.startTime) === parseInt(slot.startTime))
+      );
+    });
+    
+    const combinedTimeSlots = [
+      ...filteredTimeSlots,
+      ...specialTimeSlots
+    ];
+    
+    setTimeSlots(combinedTimeSlots);
   };
 
   const handleScheduleCourt = (scheduleData: any) => {
     console.log("Scheduling court:", scheduleData);
-    // In a real app, this would update the court's schedule in the database
   };
 
   const handleDeleteCourt = (courtId: string) => {
-    // Remove the court from the local state
     const updatedCourts = courtsList.filter(court => court.id !== courtId);
     setCourtsList(updatedCourts);
-    // Save the updated courts to localStorage
     const saveSuccess = saveCourts(updatedCourts);
     if (!saveSuccess) {
-      // If save fails, try again after a short delay
       setTimeout(() => {
         saveCourts(updatedCourts);
       }, 500);
     }
-    // Close the confirmation dialog
     setShowDeleteConfirm(null);
+    
+    const generatedTimeSlots = generateTimeSlots(updatedCourts);
+    
+    const filteredTimeSlots = generatedTimeSlots.filter(slot => {
+      return !specialTimeSlots.some(specialSlot => 
+        specialSlot.courtId === slot.courtId && 
+        specialSlot.date === slot.date && 
+        (specialSlot.startTime === slot.startTime || 
+         parseInt(specialSlot.startTime) === parseInt(slot.startTime))
+      );
+    });
+    
+    const combinedTimeSlots = [
+      ...filteredTimeSlots,
+      ...specialTimeSlots
+    ];
+    
+    setTimeSlots(combinedTimeSlots);
   };
 
-  // Group reservations by date for easier display
   const reservationsByDate: Record<string, typeof reservations> = {};
   
   reservations.forEach(reservation => {
@@ -121,46 +241,23 @@ export default function AdminPage() {
     reservationsByDate[timeSlot.date].push(reservation);
   });
   
-  // Group ALL time slots by date, not just reservations
-  const slotsByDate: Record<string, typeof timeSlots> = {};
-  
-  timeSlots.forEach(slot => {
-    if (!slotsByDate[slot.date]) {
-      slotsByDate[slot.date] = [];
-    }
-    slotsByDate[slot.date].push(slot);
-  });
-  
-  // Sort dates in ascending order
   const sortedDates = Object.keys(slotsByDate).sort();
   
-  // Sort time slots within each date by startTime
-  Object.keys(slotsByDate).forEach(date => {
-    slotsByDate[date].sort((a, b) => {
-      return a.startTime.localeCompare(b.startTime);
-    });
-  });
-  
-  // Navigate to previous day
   const goToPreviousDay = () => {
     setCurrentViewDate(prevDate => subDays(prevDate, 1));
   };
   
-  // Navigate to next day
   const goToNextDay = () => {
     setCurrentViewDate(prevDate => addDays(prevDate, 1));
   };
   
-  // Go to today
   const goToToday = () => {
     setCurrentViewDate(startOfDay(new Date()));
   };
   
-  // Format current view date
   const formattedViewDate = format(currentViewDate, "yyyy-MM-dd");
   const readableViewDate = format(currentViewDate, "EEEE, MMMM d, yyyy");
   
-  // Calendar specific functions
   const navigateMonth = (direction: 'previous' | 'next') => {
     setCurrentMonth(direction === 'previous' 
       ? subMonths(currentMonth, 1) 
@@ -168,17 +265,14 @@ export default function AdminPage() {
     );
   };
   
-  // Get calendar days for current month view
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
   
-  // Function to get day of week (0 = Sunday, 6 = Saturday)
   const getStartingDayOfWeek = () => {
     return getDay(monthStart);
   };
   
-  // Get reservations for the current month
   const monthReservations = reservations.filter(reservation => {
     const timeSlot = timeSlots.find(ts => ts.id === reservation.timeSlotId);
     if (!timeSlot) return false;
@@ -187,27 +281,22 @@ export default function AdminPage() {
     return reservationDate >= monthStart && reservationDate <= monthEnd;
   });
   
-  // Generate empty cells for days before the first day of the month
   const startingDayOfWeek = getStartingDayOfWeek();
   const emptyCells = Array.from({ length: startingDayOfWeek }, (_, index) => (
     <div key={`empty-${index}`} className="h-24 border border-border/40 bg-background/50"></div>
   ));
   
-  // Function to close reservation details dialog
   const closeReservationDetails = () => {
     setShowReservationDetails(false);
     setSelectedReservations([]);
   };
 
-  // Update the setSelectedDate function to populate reservation details
   const handleSelectDate = (dateString: string) => {
     setSelectedDate(dateString);
     
-    // Get reservations for the selected date
     const dayReservations = reservationsByDate[dateString] || [];
     
     if (dayReservations.length > 0) {
-      // Prepare reservation data with court details
       const detailedReservations = dayReservations.map(reservation => {
         const court = courtsList.find(c => c.id === reservation.courtId);
         const timeSlot = timeSlots.find(ts => ts.id === reservation.timeSlotId);
@@ -223,10 +312,8 @@ export default function AdminPage() {
     }
   };
 
-  // New function to navigate to the reservations tab from calendar view
   const handleCalendarDateClick = (dateString: string) => {
     try {
-      // Convert the date string to a Date object
       const date = new Date(dateString);
       navigateToReservationsTab(date);
     } catch (error) {
@@ -234,27 +321,115 @@ export default function AdminPage() {
     }
   };
 
-  // Function to navigate to reservations tab with specific date
   const navigateToReservationsTab = (date: Date) => {
     setCurrentViewDate(date);
     setActiveTab("reservations");
     
-    // Add highlight effect
     setHighlightDate(true);
     setTimeout(() => {
       setHighlightDate(false);
     }, 2000);
   };
 
-  // Handle date selection from scheduler chart
   const handleSchedulerDateSelect = (date: Date) => {
     navigateToReservationsTab(date);
   };
 
+  const filteredUsers = users.filter(user =>
+    user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleAddUser = () => {
+    const createdUser = userDb.createUser(newUser as Omit<User, 'id' | 'createdAt' | 'updatedAt'>);
+    if (createdUser) {
+      setUsers([...users, createdUser]);
+      setIsAddDialogOpen(false);
+      setNewUser({
+        name: '',
+        email: '',
+        duprRating: 0,
+        phoneNumber: '',
+        skillLevel: 'beginner',
+        membershipStatus: 'pending',
+      });
+    }
+  };
+
+  const handleEditUser = () => {
+    if (editingUser) {
+      const updatedUser = userDb.updateUser(editingUser.id, editingUser);
+      if (updatedUser) {
+        setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
+        setIsEditDialogOpen(false);
+        setEditingUser(null);
+      }
+    }
+  };
+
+  const handleDeleteUser = (userId: string) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      const success = userDb.deleteUser(userId);
+      if (success) {
+        setUsers(users.filter(u => u.id !== userId));
+      }
+    }
+  };
+
+  const getSkillLevelColor = (skillLevel?: string) => {
+    switch (skillLevel) {
+      case 'beginner': return 'bg-green-500';
+      case 'intermediate': return 'bg-blue-500';
+      case 'advanced': return 'bg-purple-500';
+      case 'professional': return 'bg-yellow-500';
+      default: return 'bg-gray-500';
+    }
+  };
+
+  const handleAddCoach = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCoach.name || !newCoach.email) {
+      alert('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      const coach = coachDb.createCoach({
+        name: newCoach.name,
+        email: newCoach.email,
+        phoneNumber: newCoach.phoneNumber,
+        bio: newCoach.bio,
+        specialties: newCoach.specialties || [],
+        rating: 0,
+        status: 'active'
+      });
+
+      setCoaches([...coaches, coach]);
+      setNewCoach({
+        name: '',
+        email: '',
+        phoneNumber: '',
+        bio: '',
+        specialties: []
+      });
+      setShowAddCoachModal(false);
+    } catch (error) {
+      console.error('Error adding coach:', error);
+      alert('Failed to add coach. Please try again.');
+    }
+  };
+
+  if (timeSlots.length === 0 && !isClient) {
+    return <div className="flex justify-center items-center min-h-screen">
+      <div className="text-center">
+        <h2 className="text-xl font-semibold mb-4">Loading admin panel...</h2>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-primary mx-auto"></div>
+      </div>
+    </div>;
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-background via-background/90 to-background/90">
-      <Header />
-      
       <main className="flex-1 container py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold tracking-tight mb-2 text-foreground">
@@ -270,7 +445,7 @@ export default function AdminPage() {
             <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Total Courts</p>
-                <h3 className="text-3xl font-bold">{courtsList.length}</h3>
+                <h3 className="text-3xl font-bold">{isClient ? courtsList.length : defaultCourts.length}</h3>
               </div>
               <div className="p-3 bg-white/20 rounded-full">
                 <Calendar className="h-8 w-8" />
@@ -282,7 +457,7 @@ export default function AdminPage() {
             <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Total Bookings</p>
-                <h3 className="text-3xl font-bold">{reservations.length}</h3>
+                <h3 className="text-3xl font-bold">{isClient ? reservations.length : mockReservations.length}</h3>
               </div>
               <div className="p-3 bg-white/20 rounded-full">
                 <Clock className="h-8 w-8" />
@@ -294,7 +469,7 @@ export default function AdminPage() {
             <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Time Slots</p>
-                <h3 className="text-3xl font-bold">{timeSlots.length}</h3>
+                <h3 className="text-3xl font-bold">{isClient ? timeSlots.length : '--'}</h3>
               </div>
               <div className="p-3 bg-white/20 rounded-full">
                 <BarChart3 className="h-8 w-8" />
@@ -306,7 +481,9 @@ export default function AdminPage() {
             <CardContent className="p-6 flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium">Users</p>
-                <h3 className="text-3xl font-bold">24</h3>
+                <h3 className="text-3xl font-bold">
+                  {isClient ? users.length : 0}
+                </h3>
               </div>
               <div className="p-3 bg-white/20 rounded-full">
                 <Users className="h-8 w-8" />
@@ -322,6 +499,8 @@ export default function AdminPage() {
             <TabsTrigger value="reservations">Reservations</TabsTrigger>
             <TabsTrigger value="courts">Courts</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
+            <TabsTrigger value="coaches">Coaches</TabsTrigger>
+            <TabsTrigger value="clinics">Clinics</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
           
@@ -377,19 +556,15 @@ export default function AdminPage() {
                   </div>
                 </div>
                 
-                {/* Calendar grid */}
                 <div className="grid grid-cols-7 gap-1">
-                  {/* Day headers */}
                   {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
                     <div key={day} className="text-center font-medium py-2 text-sm">
                       {day}
                     </div>
                   ))}
                   
-                  {/* Empty cells for days before month start */}
                   {emptyCells}
                   
-                  {/* Calendar days */}
                   {calendarDays.map(day => {
                     const dateString = format(day, "yyyy-MM-dd");
                     const dayReservations = reservationsByDate[dateString] || [];
@@ -476,7 +651,6 @@ export default function AdminPage() {
                 </Button>
               </div>
               
-              {/* Filter controls */}
               <div className="flex items-center justify-center gap-3 my-4 p-3 rounded-md bg-background border">
                 <div className="text-sm font-medium">Filter slots:</div>
                 <div 
@@ -527,10 +701,8 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* Show only time slots for the selected day */}
             {slotsByDate[formattedViewDate] ? (
               <>
-                {/* Check if any courts have matching slots */}
                 {courtsList.some(court => {
                   const filteredSlots = slotsByDate[formattedViewDate]
                     .filter(slot => {
@@ -541,7 +713,6 @@ export default function AdminPage() {
                     });
                   return filteredSlots.length > 0;
                 }) ? (
-                  // Show courts with matching slots
                   courtsList.map((court) => {
                     const courtSlots = slotsByDate[formattedViewDate]
                       .filter((slot) => {
@@ -569,10 +740,8 @@ export default function AdminPage() {
                         <CardContent>
                           <div className="space-y-2">
                             {courtSlots.map((slot) => {
-                              // Only use the actual reservation data, no placeholders
                               const reservation = reservations.find(r => r.timeSlotId === slot.id);
                               
-                              // Debug logging to help identify issues
                               console.log(`Slot ${slot.id} (${slot.date} ${slot.startTime}): available=${slot.available}, has reservation=${!!reservation}`);
                               if (reservation) {
                                 console.log(`Real booking for ${slot.id}:`, reservation);
@@ -583,12 +752,11 @@ export default function AdminPage() {
                                   key={slot.id}
                                   className={`min-h-[4rem] rounded-sm flex items-center px-4 transition-all duration-300 hover:scale-[1.01] ${
                                     !slot.available
-                                      ? "bg-blue-200 text-blue-800"  // Blue for ALL unavailable/booked slots
-                                      : "bg-green-200 text-green-800" // Green for available slots
+                                      ? "bg-blue-200 text-blue-800"
+                                      : "bg-green-200 text-green-800"
                                   }`}
                                 >
                                   {reservation ? (
-                                    // Only show REAL reservation details in new layout
                                     <>
                                       <div className="w-1/4">
                                         <p className="font-bold text-blue-900">Reserved by</p>
@@ -623,7 +791,6 @@ export default function AdminPage() {
                                       </div>
                                     </>
                                   ) : (
-                                    // Original layout for available slots
                                     <>
                                       <div className="flex-1">
                                         <p className="font-medium">
@@ -653,7 +820,6 @@ export default function AdminPage() {
                     );
                   })
                 ) : (
-                  // No slots match the current filter
                   <Card>
                     <CardContent className="p-6">
                       <div className="text-center">
@@ -782,12 +948,11 @@ export default function AdminPage() {
               </CardContent>
             </Card>
             
-            {/* Court edit dialog */}
             {editingCourt && (
               <Dialog open={!!editingCourt} onOpenChange={open => !open && setEditingCourt(null)}>
-                <DialogContent>
+                <DialogContent className="sm:max-w-[425px] border border-border/50 bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60 shadow-lg shadow-primary/5">
                   <DialogHeader>
-                    <DialogTitle>
+                    <DialogTitle className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
                       {editingCourt.id ? `Edit ${editingCourt.name}` : 'Add New Court'}
                     </DialogTitle>
                   </DialogHeader>
@@ -801,7 +966,6 @@ export default function AdminPage() {
               </Dialog>
             )}
             
-            {/* Court scheduling dialog */}
             {schedulingCourt && (
               <Dialog open={!!schedulingCourt} onOpenChange={open => !open && setSchedulingCourt(null)}>
                 <DialogContent>
@@ -822,7 +986,6 @@ export default function AdminPage() {
               </Dialog>
             )}
             
-            {/* Delete confirmation dialog */}
             {showDeleteConfirm && (
               <Dialog open={!!showDeleteConfirm} onOpenChange={open => !open && setShowDeleteConfirm(null)}>
                 <DialogContent>
@@ -858,9 +1021,258 @@ export default function AdminPage() {
                 <CardDescription>Manage user accounts and permissions</CardDescription>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground">User management panel will be implemented here.</p>
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div className="relative w-64">
+                      <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search users..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-8"
+                      />
+                    </div>
+                    <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add User
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New User</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <label>Name</label>
+                            <Input
+                              value={newUser.name}
+                              onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label>Email</label>
+                            <Input
+                              type="email"
+                              value={newUser.email}
+                              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label>DUPR Rating</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              value={newUser.duprRating}
+                              onChange={(e) => setNewUser({ ...newUser, duprRating: parseFloat(e.target.value) })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label>Phone Number</label>
+                            <Input
+                              value={newUser.phoneNumber}
+                              onChange={(e) => setNewUser({ ...newUser, phoneNumber: e.target.value })}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label>Skill Level</label>
+                            <Select
+                              value={newUser.skillLevel}
+                              onValueChange={(value) => setNewUser({ ...newUser, skillLevel: value as any })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select skill level" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="beginner">Beginner</SelectItem>
+                                <SelectItem value="intermediate">Intermediate</SelectItem>
+                                <SelectItem value="advanced">Advanced</SelectItem>
+                                <SelectItem value="professional">Professional</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-2">
+                            <label>Membership Status</label>
+                            <Select
+                              value={newUser.membershipStatus}
+                              onValueChange={(value) => setNewUser({ ...newUser, membershipStatus: value as any })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select status" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="inactive">Inactive</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button onClick={handleAddUser} className="w-full">
+                            Add User
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>DUPR Rating</TableHead>
+                          <TableHead>Skill Level</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredUsers.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center py-8">
+                              <p className="text-muted-foreground">No users found</p>
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          filteredUsers.map((user) => (
+                            <TableRow key={user.id}>
+                              <TableCell className="font-medium">{user.name}</TableCell>
+                              <TableCell>{user.email}</TableCell>
+                              <TableCell>
+                                <div className="flex items-center">
+                                  <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                                  {user.duprRating?.toFixed(2) || 'N/A'}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={getSkillLevelColor(user.skillLevel)}>
+                                  {user.skillLevel || 'Not Set'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={user.membershipStatus === 'active' ? 'success' : 'secondary'}>
+                                  {user.membershipStatus || 'Not Set'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex space-x-2">
+                                  <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                                    <DialogTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setEditingUser(user)}
+                                      >
+                                        <Edit2 className="h-4 w-4" />
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent>
+                                      <DialogHeader>
+                                        <DialogTitle>Edit User</DialogTitle>
+                                      </DialogHeader>
+                                      {editingUser && (
+                                        <div className="space-y-4 py-4">
+                                          <div className="space-y-2">
+                                            <label>Name</label>
+                                            <Input
+                                              value={editingUser.name}
+                                              onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <label>Email</label>
+                                            <Input
+                                              type="email"
+                                              value={editingUser.email}
+                                              onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <label>DUPR Rating</label>
+                                            <Input
+                                              type="number"
+                                              step="0.01"
+                                              value={editingUser.duprRating}
+                                              onChange={(e) => setEditingUser({ ...editingUser, duprRating: parseFloat(e.target.value) })}
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <label>Skill Level</label>
+                                            <Select
+                                              value={editingUser.skillLevel}
+                                              onValueChange={(value) => setEditingUser({ ...editingUser, skillLevel: value as any })}
+                                            >
+                                              <SelectTrigger>
+                                                <SelectValue placeholder="Select skill level" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="beginner">Beginner</SelectItem>
+                                                <SelectItem value="intermediate">Intermediate</SelectItem>
+                                                <SelectItem value="advanced">Advanced</SelectItem>
+                                                <SelectItem value="professional">Professional</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <div className="space-y-2">
+                                            <label>Membership Status</label>
+                                            <Select
+                                              value={editingUser.membershipStatus}
+                                              onValueChange={(value) => setEditingUser({ ...editingUser, membershipStatus: value as any })}
+                                            >
+                                              <SelectTrigger>
+                                                <SelectValue placeholder="Select status" />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="active">Active</SelectItem>
+                                                <SelectItem value="inactive">Inactive</SelectItem>
+                                                <SelectItem value="pending">Pending</SelectItem>
+                                              </SelectContent>
+                                            </Select>
+                                          </div>
+                                          <Button onClick={handleEditUser} className="w-full">
+                                            Save Changes
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </DialogContent>
+                                  </Dialog>
+                                  <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    onClick={() => handleDeleteUser(user.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
               </CardContent>
             </Card>
+          </TabsContent>
+          
+          <TabsContent value="coaches" className="space-y-4">
+            <CoachManagement onUpdate={() => {
+              const allCoaches = coachDb.getAllCoaches();
+              setCoaches(allCoaches);
+            }} />
+          </TabsContent>
+          
+          <TabsContent value="clinics" className="space-y-4">
+            <ClinicManagement 
+              coaches={coaches}
+              onUpdate={() => {
+                const allCoaches = coachDb.getAllCoaches();
+                setCoaches(allCoaches);
+              }}
+            />
           </TabsContent>
           
           <TabsContent value="settings" className="space-y-6">
@@ -876,7 +1288,6 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
         
-        {/* Date detail modal */}
         {selectedDate && (
           <Dialog open={!!selectedDate} onOpenChange={(open) => !open && setSelectedDate(null)}>
             <DialogContent className="max-w-4xl">
@@ -914,10 +1325,10 @@ export default function AdminPage() {
                             </div>
                             
                             <div className="w-1/4">
-                              <h4 className="font-medium mb-1">Contact</h4>
-                              <div className="text-sm space-y-1">
-                                <p><span className="font-semibold">Email:</span> {reservation.playerEmail}</p>
-                                <p><span className="font-semibold">Phone:</span> {reservation.playerPhone}</p>
+                              <h4 className="font-medium mb-2">Contact</h4>
+                              <div className="space-y-1">
+                                <p className="text-sm"><span className="font-semibold">Email:</span> {reservation.playerEmail}</p>
+                                <p className="text-sm"><span className="font-semibold">Phone:</span> {reservation.playerPhone}</p>
                               </div>
                             </div>
                             
@@ -960,7 +1371,6 @@ export default function AdminPage() {
           </Dialog>
         )}
 
-        {/* Reservation Details Dialog */}
         <Dialog open={showReservationDetails} onOpenChange={setShowReservationDetails}>
           <DialogContent className="max-w-2xl">
             <DialogHeader>

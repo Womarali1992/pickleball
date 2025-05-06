@@ -4,38 +4,36 @@
  
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
- 
-    --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
- 
-    --primary: 210 100% 50%;
-    --primary-foreground: 210 40% 98%;
- 
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 220.9 39.3% 11%;
- 
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
- 
-    --accent: 220 14.3% 95.9%;
-    --accent-foreground: 220.9 39.3% 11%;
- 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 224 71.4% 4.1%;
+    --primary: #70fd65;
+    --primary-rgb: 112, 253, 101;
+    --secondary: #218cfd;
+    --secondary-rgb: 33, 140, 253;
+    --accent: #fed97f;
+    --accent-rgb: 254, 217, 127;
+    --success: #70fd65;
+    --success-rgb: 112, 253, 101;
+    --info: #218cfd;
+    --info-rgb: 33, 140, 253;
+    --background: #ffffff;
+    --foreground: #000000;
+    --card: #ffffff;
+    --card-foreground: #000000;
+    --popover: #ffffff;
+    --popover-foreground: #000000;
+    --primary-foreground: #000000;
+    --secondary-foreground: #ffffff;
+    --accent-foreground: #000000;
+    --success-foreground: #000000;
+    --info-foreground: #ffffff;
+    --muted: #f3f4f6;
+    --muted-foreground: #6b7280;
+    --border: #e5e7eb;
+    --input: #e5e7eb;
+    --ring: #70fd65;
+    --radius: 0.5rem;
     
     --pickleball-green: 145 55% 40%;
     --pickleball-green-foreground: 210 40% 98%;
- 
-    --radius: 0.5rem;
  
     --chart-1: 12 76% 61%;
  

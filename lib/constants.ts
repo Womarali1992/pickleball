@@ -42,5 +42,15 @@ export const COLORS = {
     TEXT: "text-gray-800",
     TEXT_SMALL: "text-gray-700",
     LABEL: "Blocked",
+  },
+
+  // Clinic slots styling
+  CLINIC: {
+    BG: "bg-yellow-500", // Using the yellow from the original SCHEDULER_COLORS
+    HOVER: "hover:bg-yellow-600", // Adding a hover state
+    BORDER: "border-yellow-600", // Adding a border state
+    TEXT: "text-white", // Using the text color from original
+    TEXT_SMALL: "text-yellow-100", // Adding a small text variant
+    LABEL: "Clinic",
   }
 }; 

@@ -3,10 +3,16 @@
 import React, { useState } from "react";
 import { TimeSlot, Court } from "@/lib/types";
 import { format, addDays, startOfWeek } from "date-fns";
+import { PopoverContent } from "@/components/ui/popover";
+import { COLORS } from "@/lib/constants";
+import { Reservation } from "@/lib/data";
+import { useSchedulerStatus } from "@/hooks/useSchedulerStatus";
+import WeekViewDayColumn from "./WeekViewDayColumn";
 
 interface WeekViewCourtProps {
   court: Court;
   timeSlots: TimeSlot[];
+  reservations: Reservation[];
   onSelectTimeSlot?: (timeSlot: TimeSlot, date: Date) => void;
   aspectRatio?: string;
   startDate?: Date;
@@ -15,6 +21,7 @@ interface WeekViewCourtProps {
 export default function WeekViewCourt({
   court,
   timeSlots,
+  reservations,
   onSelectTimeSlot,
   aspectRatio = "aspect-[22/10]",
   startDate = new Date()
@@ -41,11 +48,103 @@ export default function WeekViewCourt({
   // Determine if court is vertical
   const isVertical = court.orientation === "vertical";
   
-  // Handle time slot selection
-  const handleSlotClick = (slot: TimeSlot, date: Date) => {
-    if (onSelectTimeSlot) {
-      onSelectTimeSlot(slot, date);
+  // Add state for popover management
+  const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
+
+  // Use the hook to get status logic
+  const { getStatus } = useSchedulerStatus(timeSlots, reservations);
+
+  // Handle toggling the popover
+  const togglePopover = (slotId: string) => {
+    if (openPopoverId === slotId) {
+      setOpenPopoverId(null);
+    } else {
+      setOpenPopoverId(slotId);
     }
+  };
+
+  // Handle time slot selection - This will be passed to WeekViewTimeSlotButton
+  const handleSlotClick = (slot: TimeSlot, date: Date) => {
+    const hour = parseInt(slot.startTime.split(':')[0]);
+    const status = getStatus(court, date, hour);
+    const isClinic = !!status.slot?.clinicDetails;
+
+    if (!isClinic && onSelectTimeSlot && status.available) {
+        // Only call onSelectTimeSlot for available, non-clinic slots
+        onSelectTimeSlot(slot, date);
+    } else if (isClinic) {
+        // For clinics, just toggle the popover
+        const slotId = slot.id || `${slot.courtId}-${slot.date}-${slot.startTime}`;
+        togglePopover(slotId);
+    }
+    // Do nothing if booked/blocked regular slot is clicked (handled by disabled state in button)
+  };
+
+  // Add a function to render clinic popover content
+  const renderClinicPopover = (slot: TimeSlot, date: Date) => {
+    // We should get details from the status object, not re-fetch
+    const hour = parseInt(slot.startTime.split(':')[0]);
+    const status = getStatus(court, date, hour);
+    const clinicDetails = status.slot?.clinicDetails;
+
+    if (!clinicDetails) {
+      // Render basic popover if details are missing for some reason
+      return (
+          <PopoverContent className="w-80 p-4">
+              <h4 className="font-semibold">Clinic</h4>
+              <p className="text-sm text-muted-foreground">Details unavailable.</p>
+          </PopoverContent>
+      );
+    }
+
+    // Remove default values and fetching logic
+    /*
+    const clinicTitle = slot.courtName?.replace('Clinic: ', '') || 'Clinic';
+    const clinicId = slot.id?.replace('clinic-', '') || '';
+    let coachName = "Coach";
+    // ... rest of defaults and fetch logic ...
+    */
+    
+    return (
+      <PopoverContent className="w-80 p-0">
+        <div className="bg-gradient-to-r from-yellow-500 to-yellow-400 p-3 text-white rounded-t">
+          {/* Use clinicDetails */}
+          <h4 className="font-bold text-base">{clinicDetails.title}</h4>
+          <p className="text-sm font-medium">with {clinicDetails.coachName}</p>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="text-sm text-muted-foreground">
+            {/* Use clinicDetails */}
+            {clinicDetails.description || 'No description available.'}
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <Clock className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{slot.startTime} - {slot.endTime}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">{format(date, "MMMM d, yyyy")}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              {/* Use clinicDetails */}
+              <span className="text-sm">Max participants: {clinicDetails.maxParticipants}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Star className="h-4 w-4 text-muted-foreground" />
+              {/* Use clinicDetails */}
+              <span className="text-sm">Skill level: {clinicDetails.skillLevel}</span>
+            </div>
+          </div>
+          <div className="bg-green-100 rounded p-2 flex justify-between items-center text-green-800">
+            <span className="font-medium">Price per person</span>
+            {/* Use clinicDetails */}
+            <span className="font-bold text-lg">${clinicDetails.price}</span>
+          </div>
+        </div>
+      </PopoverContent>
+    );
   };
 
   return (
@@ -65,43 +164,18 @@ export default function WeekViewCourt({
         
         <div className="flex-1 bg-white rounded-b-lg border-x border-b overflow-hidden">
           <div className="grid grid-cols-7 h-full">
-            {formattedDates.map(({ date, displayDate, formattedDate }) => (
-              <div key={formattedDate} className="flex flex-col border-r last:border-r-0">
-                {/* Day header */}
-                <div className="bg-gray-100 p-2 text-center border-b">
-                  <div className="text-sm font-medium">{displayDate}</div>
-                </div>
-                
-                {/* Time slots for the day */}
-                <div className="flex-1 overflow-y-auto p-1">
-                  {slotsByDate[formattedDate]?.length > 0 ? (
-                    <div className="space-y-1">
-                      {slotsByDate[formattedDate].map((slot) => {
-                        const isAvailable = slot.available;
-                        const bgColor = isAvailable 
-                          ? "bg-green-500 hover:bg-green-300" 
-                          : "bg-blue-500 hover:bg-blue-300";
-                        const statusLabel = isAvailable ? "Available" : "Booked";
-                        
-                        return (
-                          <button
-                            key={slot.id || `${slot.courtId}-${slot.date}-${slot.startTime}`}
-                            onClick={() => handleSlotClick(slot, date)}
-                            className={`w-full whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input hover:text-accent-foreground px-1 py-1 court-slot flex flex-col items-center justify-center ${bgColor} text-white`}
-                          >
-                            <span className="text-xs font-medium">{slot.startTime}</span>
-                            <span className="text-xs text-muted-foreground">{statusLabel}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-gray-400 text-xs">
-                      No slots
-                    </div>
-                  )}
-                </div>
-              </div>
+            {formattedDates.map((dayInfo) => (
+              <WeekViewDayColumn 
+                key={dayInfo.formattedDate}
+                dayInfo={dayInfo}
+                slotsForDay={slotsByDate[dayInfo.formattedDate]}
+                court={court}
+                getStatus={getStatus}
+                openPopoverId={openPopoverId}
+                togglePopover={togglePopover}
+                handleSlotClick={handleSlotClick}
+                renderClinicPopover={renderClinicPopover}
+              />
             ))}
           </div>
         </div>

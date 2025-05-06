@@ -40,7 +40,7 @@ export type User = {
 };
 
 // Default courts data
-const defaultCourts: Court[] = [
+export const defaultCourts: Court[] = [
   {
     id: "court1",
     name: "Court 1",
@@ -98,7 +98,6 @@ export const saveCourts = (updatedCourts: Court[]): boolean => {
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem('pickleball-courts', JSON.stringify(updatedCourts));
-      console.log('Courts saved successfully:', updatedCourts);
       return true;
     } catch (e) {
       console.error('Error saving courts to localStorage:', e);
@@ -126,13 +125,11 @@ export const specialTimeSlots: TimeSlot[] = [
   }
 ];
 
-// Helper function to generate time slots
-function generateTimeSlots(): TimeSlot[] {
+// Helper function to generate time slots - MODIFIED to accept courts parameter
+export function generateTimeSlots(courts: Court[]): TimeSlot[] {
   const slots: TimeSlot[] = [];
   const startDate = new Date(); // Today's date
   const hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
-  
-  console.log("Generating time slots starting from:", format(startDate, "yyyy-MM-dd"));
   
   // For each of the next 7 days
   for (let day = 0; day < 7; day++) {
@@ -140,10 +137,8 @@ function generateTimeSlots(): TimeSlot[] {
     currentDate.setDate(currentDate.getDate() + day);
     const dateString = formatDate(currentDate);
     
-    console.log(`Generating slots for date: ${dateString}`);
-    
-    // For each court
-    getCourts().forEach(court => {
+    // For each court - use passed courts parameter instead of getCourts()
+    courts.forEach(court => {
       // For each hour
       hours.forEach((hour, index) => {
         const endHour = hours[index + 1] || "19:00";
@@ -179,12 +174,8 @@ function generateTimeSlots(): TimeSlot[] {
     });
   }
   
-  console.log(`Total time slots generated: ${slots.length}`);
   return slots;
 }
-
-// Generate time slots first
-const generatedTimeSlots = generateTimeSlots();
 
 // Generate current date for consistent date handling
 const currentDate = new Date();
@@ -203,23 +194,6 @@ export const todayReservation: Reservation = {
   createdAt: new Date().toISOString(),
 };
 
-// Remove any conflicting slots (same court, same date, same time)
-const filteredTimeSlots = generatedTimeSlots.filter(slot => {
-  // Check if this slot conflicts with any special slot
-  return !specialTimeSlots.some(specialSlot => 
-    specialSlot.courtId === slot.courtId && 
-    specialSlot.date === slot.date && 
-    (specialSlot.startTime === slot.startTime || 
-     parseInt(specialSlot.startTime) === parseInt(slot.startTime))
-  );
-});
-
-// Combine normal and special time slots
-export const timeSlots: TimeSlot[] = [
-  ...filteredTimeSlots,
-  ...specialTimeSlots
-];
-
 // Special reservations (manually defined)
 export const specialReservations: Reservation[] = [
   // Add reservation for April 25, 2025
@@ -236,7 +210,7 @@ export const specialReservations: Reservation[] = [
   }
 ];
 
-// Combine all reservations
+// Export mock reservations that components can use
 export const reservations: Reservation[] = [
   // Add today's reservation
   todayReservation,
@@ -339,4 +313,60 @@ function formatDate(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+// Generate a standard set of time slots based on defaultCourts for components that need them
+// This provides backwards compatibility while AdminPage can still generate its own time slots
+const generatedTimeSlots = generateTimeSlots(defaultCourts);
+
+// Remove any conflicting slots (same court, same date, same time)
+const filteredTimeSlots = generatedTimeSlots.filter(slot => {
+  // Check if this slot conflicts with any special slot
+  return !specialTimeSlots.some(specialSlot => 
+    specialSlot.courtId === slot.courtId && 
+    specialSlot.date === slot.date && 
+    (specialSlot.startTime === slot.startTime || 
+     parseInt(specialSlot.startTime) === parseInt(slot.startTime))
+  );
+});
+
+// Get clinic time slots
+let clinicTimeSlots: TimeSlot[] = [];
+
+// Function to get combined time slots including clinics
+const getCombinedTimeSlots = () => {
+  if (typeof window !== 'undefined') {
+    try {
+      // Ensure we update and get the latest clinic data
+      const dbService = require('./db-service').dbService;
+      if (dbService) {
+        // Force an update of clinics to get fresh data
+        clinicTimeSlots = dbService.updateClinicTimeSlots();
+      }
+    } catch (err) {
+      console.error('Error loading clinic slots:', err);
+    }
+  }
+  
+  return [...filteredTimeSlots, ...specialTimeSlots, ...clinicTimeSlots];
+};
+
+// Re-export timeSlots for backward compatibility with other components
+export const timeSlots = typeof window !== 'undefined' 
+  ? getCombinedTimeSlots() 
+  : [...filteredTimeSlots, ...specialTimeSlots];
+
+// Update the global window object for legacy code compatibility
+if (typeof window !== 'undefined') {
+  // After initial load, try to update with clinic slots again
+  setTimeout(() => {
+    try {
+      import('./db-service').then(({ dbService }) => {
+        clinicTimeSlots = dbService.getClinicTimeSlots();
+        (window as any).timeSlots = [...filteredTimeSlots, ...specialTimeSlots, ...clinicTimeSlots];
+      });
+    } catch (err) {
+      console.error('Error updating time slots with clinics:', err);
+    }
+  }, 500);
 } 

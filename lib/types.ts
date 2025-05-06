@@ -6,6 +6,16 @@ export interface TimeSlot {
   startTime: string;
   endTime: string;
   available: boolean;
+  reason?: string;
+  clinicDetails?: {
+    coachId: string;
+    coachName: string;
+    title: string;
+    description?: string;
+    price: number;
+    skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'all';
+    maxParticipants: number;
+  };
 }
 
 export interface Court {
@@ -42,4 +52,43 @@ export interface User {
   skillLevel?: 'beginner' | 'intermediate' | 'advanced' | 'professional';
   preferredCourts?: string[];
   membershipStatus?: 'active' | 'inactive' | 'pending';
+}
+
+export interface Coach {
+  id: string;
+  name: string;
+  email: string;
+  phoneNumber?: string;
+  bio?: string;
+  specialties: string[];
+  rating: number;
+  profileImage?: string;
+  availability?: {
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+  }[];
+  status: 'active' | 'inactive' | 'pending';
+  certifications?: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface Clinic {
+  id: string;
+  coachId: string;
+  title: string;
+  description?: string;
+  date: Date;
+  startTime: string;
+  endTime: string;
+  courtId: string;
+  maxParticipants: number;
+  enrolled: number;
+  price: number;
+  skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'all';
+  status: 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
+  participants?: string[]; // User IDs of participants
+  createdAt: Date;
+  updatedAt: Date;
 } 

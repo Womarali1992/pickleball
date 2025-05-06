@@ -15,6 +15,11 @@ const SLOT_COLORS = {
     BG: "bg-blue-500 hover:bg-blue-300", 
     TEXT: "text-white",
     LABEL: "Booked"
+  },
+  CLINIC: {
+    BG: "bg-yellow-500 hover:bg-yellow-300",
+    TEXT: "text-white",
+    LABEL: "Clinic"
   }
 };
 
@@ -68,8 +73,20 @@ export default function CourtCard({
         <div className={`grid ${gridCols} gap-2 bg-white p-3 rounded-b-lg border-x border-b flex-1 overflow-auto`}>
           {sortedSlots.map((slot) => {
             const isAvailable = slot.available;
-            const bgColor = isAvailable ? "bg-green-500 hover:bg-green-300" : "bg-blue-500 hover:bg-blue-300";
-            const statusLabel = isAvailable ? "Available" : "Booked";
+            const isClinic = slot.courtName?.startsWith('Clinic:');
+            
+            let bgColor, statusLabel;
+            
+            if (isClinic) {
+              bgColor = SLOT_COLORS.CLINIC.BG;
+              statusLabel = "Clinic";
+            } else if (isAvailable) {
+              bgColor = SLOT_COLORS.AVAILABLE.BG;
+              statusLabel = "Available";
+            } else {
+              bgColor = SLOT_COLORS.BOOKED.BG;
+              statusLabel = "Booked";
+            }
             
             // For vertical courts, we make buttons shorter but wider
             const buttonHeight = isVertical ? "h-10" : "h-16";

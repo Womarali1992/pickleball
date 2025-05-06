@@ -25,6 +25,11 @@ const SLOT_COLORS = {
     BG: "bg-blue-500 hover:bg-blue-600",
     TEXT: "text-white",
     LABEL: "Your Booking"
+  },
+  CLINIC: {
+    BG: "bg-yellow-500 hover:bg-yellow-300",
+    TEXT: "text-white",
+    LABEL: "Clinic"
   }
 };
 
@@ -201,18 +206,31 @@ export default function CourtCalendar({ onSelectTimeSlot, selectedDate }: CourtC
                 <div className={`${getTimeSlotContainerClass(court.courtId)} bg-white p-4 rounded-b-lg border-x border-b`}>
                   {court.slots.map((slot) => {
                     const slotId = slot.id || `${slot.courtId}-${slot.date}-${slot.startTime}`;
+                    const isClinic = slot.courtName?.startsWith('Clinic:');
+                    
+                    // Determine the appropriate color class
+                    let colorClass;
+                    let statusLabel;
+                    
+                    if (isClinic) {
+                      colorClass = SLOT_COLORS.CLINIC.BG + " " + SLOT_COLORS.CLINIC.TEXT;
+                      statusLabel = SLOT_COLORS.CLINIC.LABEL;
+                    } else if (isSlotBookedByUser(slotId)) {
+                      colorClass = SLOT_COLORS.MY_BOOKING.BG + " " + SLOT_COLORS.MY_BOOKING.TEXT;
+                      statusLabel = SLOT_COLORS.MY_BOOKING.LABEL;
+                    } else if (!slot.available || getReservationForSlot(slotId)) {
+                      colorClass = SLOT_COLORS.BOOKED.BG + " " + SLOT_COLORS.BOOKED.TEXT;
+                      statusLabel = SLOT_COLORS.BOOKED.LABEL;
+                    } else {
+                      colorClass = SLOT_COLORS.AVAILABLE.BG + " " + SLOT_COLORS.AVAILABLE.TEXT;
+                      statusLabel = SLOT_COLORS.AVAILABLE.LABEL;
+                    }
+
                     return (
                       <Button
                         key={`${slotId}-${refreshKey}`}
-                        onClick={() => slot.available && handleSlotSelect(slot)}
-                        className={`court-slot h-16 flex flex-col items-center justify-center ${
-                          // Check if slot has a reservation that belongs to the user
-                          isSlotBookedByUser(slotId)
-                            ? SLOT_COLORS.MY_BOOKING.BG + " " + SLOT_COLORS.MY_BOOKING.TEXT
-                            : !slot.available || getReservationForSlot(slotId)
-                              ? SLOT_COLORS.BOOKED.BG + " " + SLOT_COLORS.BOOKED.TEXT
-                              : SLOT_COLORS.AVAILABLE.BG + " " + SLOT_COLORS.AVAILABLE.TEXT
-                        }`}
+                        onClick={() => slot.available && !isClinic && handleSlotSelect(slot)}
+                        className={`court-slot h-16 flex flex-col items-center justify-center ${colorClass}`}
                         variant="outline"
                       >
                         <span className="text-sm font-medium">

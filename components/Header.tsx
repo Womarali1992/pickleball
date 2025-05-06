@@ -46,6 +46,14 @@ export default function Header() {
             Schedule
           </Link>
           <Link 
+            href="/clinics" 
+            className={`text-sm font-medium hover:underline ${
+              pathname === "/clinics" ? "text-primary" : ""
+            }`}
+          >
+            Clinics
+          </Link>
+          <Link 
             href="/about" 
             className={`text-sm font-medium hover:underline ${
               pathname === "/about" ? "text-primary" : ""
@@ -93,6 +101,15 @@ export default function Header() {
                 onClick={() => setIsMenuOpen(false)}
               >
                 Schedule
+              </Link>
+              <Link 
+                href="/clinics" 
+                className={`block text-sm font-medium hover:underline ${
+                  pathname === "/clinics" ? "text-primary" : ""
+                }`}
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Clinics
               </Link>
               <Link 
                 href="/about" 

@@ -26,11 +26,16 @@ const DAY_GRADIENTS = {
 };
 
 export default function SchedulePage() {
-  const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
+  const [selectedDate, setSelectedDate] = useState<Date>(() => startOfDay(new Date()));
   const [viewMode, setViewMode] = useState<"overview" | "day" | "calendar">("overview");
   const [schedulingCourt, setSchedulingCourt] = useState<any>(null);
-  const [courtsList, setCourtsList] = useState(getCourts());
-  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [courtsList, setCourtsList] = useState(() => getCourts());
+  const [currentMonth, setCurrentMonth] = useState(() => new Date());
+  const [isMounted, setIsMounted] = useState(false);
+
+  React.useEffect(() => {
+    setIsMounted(true);
+  }, []);
   
   const handleScheduleCourt = (court: any) => {
     setSchedulingCourt(court);
@@ -41,7 +46,7 @@ export default function SchedulePage() {
     setViewMode("day");
   };
 
-  const formattedDate = format(selectedDate, "MMMM d, yyyy");
+  const formattedDate = isMounted ? format(selectedDate, "MMMM d, yyyy") : format(startOfDay(new Date()), "MMMM d, yyyy");
 
   // Get calendar days for current month view
   const monthStart = startOfMonth(currentMonth);
