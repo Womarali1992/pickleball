@@ -32,6 +32,9 @@ const WeekViewTimeSlotButton: React.FC<WeekViewTimeSlotButtonProps> = ({
 }) => {
 
     const isClinic = !!status.slot?.clinicDetails;
+    console.log('WeekViewTimeSlotButton - Slot:', slot);
+    console.log('WeekViewTimeSlotButton - Status:', status);
+    console.log('WeekViewTimeSlotButton - Is clinic:', isClinic);
 
     let bgColor;
     let statusLabel;
@@ -39,6 +42,7 @@ const WeekViewTimeSlotButton: React.FC<WeekViewTimeSlotButtonProps> = ({
     if (isClinic) {
         bgColor = `${COLORS.CLINIC.BG} ${COLORS.CLINIC.HOVER}`;
         statusLabel = COLORS.CLINIC.LABEL;
+        console.log('WeekViewTimeSlotButton - Using clinic colors:', bgColor);
     // TODO: Add MY_BOOKING check if needed
     } else if (status.available) {
         bgColor = `${COLORS.AVAILABLE.BG} ${COLORS.AVAILABLE.HOVER}`;
@@ -52,8 +56,9 @@ const WeekViewTimeSlotButton: React.FC<WeekViewTimeSlotButtonProps> = ({
         bgColor = `${COLORS.BLOCKED.BG} ${COLORS.BLOCKED.HOVER}`;
         statusLabel = COLORS.BLOCKED.LABEL;
     }
+    console.log('WeekViewTimeSlotButton - Final background color:', bgColor);
 
-    const buttonClassName = `w-full whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input hover:text-accent-foreground px-1 py-1 court-slot flex flex-col items-center justify-center ${bgColor} text-white`;
+    const buttonClassName = `w-full whitespace-nowrap rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input hover:text-accent-foreground px-2 py-2 court-slot flex flex-col items-center justify-center ${bgColor} text-white h-[4.5rem]`;
 
     return (
         <React.Fragment>

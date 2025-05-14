@@ -33,6 +33,7 @@ interface TimeSlotCellProps {
     openPopoverId: string | null;
     togglePopover: (id: string) => void;
     onScheduleCourt: (court: Court) => void;
+    isAdmin?: boolean; // Add isAdmin prop
 }
 
 // Helper functions (can be passed as props or imported if moved to utils)
@@ -48,6 +49,7 @@ export default function TimeSlotCell({
     openPopoverId,
     togglePopover,
     onScheduleCourt,
+    isAdmin = false, // Default to false
 }: TimeSlotCellProps) {
     const [bookingInfo, setBookingInfo] = useState({
         name: '',
@@ -154,8 +156,11 @@ export default function TimeSlotCell({
     // Determine background class based on status
     const getCellBackground = (status: SlotStatus) => {
         // Use courtName from slot to identify clinics (adjust if needed)
-        if (status.slot?.courtName?.startsWith('Clinic:')) {
-            return `${COLORS.CLINIC.BG} ${COLORS.CLINIC.TEXT}`;
+        if (status.slot?.clinicDetails) {
+            console.log('TimeSlotCell - Found clinic:', status.slot.clinicDetails);
+            const bgClass = `${COLORS.CLINIC.BG} ${COLORS.CLINIC.TEXT}`;
+            console.log('TimeSlotCell - Using clinic colors:', bgClass);
+            return bgClass;
         }
         if (status.reservation && isUserBooking(status.reservation)) {
             return `${COLORS.MY_BOOKING.BG} ${COLORS.MY_BOOKING.TEXT}`;
@@ -331,16 +336,63 @@ export default function TimeSlotCell({
         );
     } else { // Available or Blocked/Unavailable slot
         const isClickable = status.available;
+        const [isClicking, setIsClicking] = useState(false);
+
+        const handleClick = (e: React.MouseEvent) => {
+            // Prevent event propagation and default behavior
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Prevent multiple clicks
+            if (isClicking) {
+                console.log('Click blocked - already processing');
+                return;
+            }
+            
+            setIsClicking(true);
+            console.log('TimeSlotCell clicked:', { 
+                court, 
+                day, 
+                hour, 
+                isAdmin, 
+                isClickable,
+                status
+            });
+            
+            if (isClickable) {
+                try {
+                    // Pass the time slot information for both admin and regular users
+                    onScheduleCourt({
+                        ...court,
+                        selectedTime: `${hour}:00`,
+                        selectedDate: day,
+                        isClinic: isAdmin // Set isClinic based on isAdmin
+                    });
+                } catch (error) {
+                    console.error('Error scheduling:', error);
+                } finally {
+                    // Reset clicking state after a shorter delay
+                    setTimeout(() => {
+                        setIsClicking(false);
+                    }, 300);
+                }
+            } else {
+                console.log('Slot not clickable');
+                setIsClicking(false);
+            }
+        };
+
         return (
             <div
                 className={`${cellClass} ${bgClass} ${isClickable ? 'cursor-pointer hover:opacity-80' : 'cursor-not-allowed'}`}
-                onClick={() => isClickable && onScheduleCourt(court)}
-                title={status.reason || (isClickable ? 'Available' : 'Unavailable')}
+                onClick={handleClick}
+                onMouseDown={(e) => e.preventDefault()} // Prevent default mouse down behavior
+                title={status.reason || (isClickable ? (isAdmin ? 'Click to schedule clinic' : 'Available') : 'Unavailable')}
             >
-                 <div className="flex items-center overflow-hidden whitespace-nowrap">
-                     <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
-                     <span className="truncate">{`${hour}:00`}</span>
-                 </div>
+                <div className="flex items-center overflow-hidden whitespace-nowrap">
+                    <Clock className="h-3 w-3 mr-1 flex-shrink-0" />
+                    <span className="truncate">{`${hour}:00`}</span>
+                </div>
             </div>
         );
     }

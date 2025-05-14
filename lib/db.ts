@@ -76,15 +76,48 @@ const loadClinicsFromStorage = (): Clinic[] => {
   
   try {
     const storedClinics = localStorage.getItem(CLINICS_STORAGE_KEY);
-    if (!storedClinics) return [];
+    console.log('Loading clinics from storage:', storedClinics);
+    
+    // Initialize with default clinics if none exist
+    if (!storedClinics) {
+      const defaultClinics = [
+        {
+          id: 'clinic-1',
+          title: 'Beginner Workshop',
+          description: 'Introduction to pickleball basics',
+          coachId: 'coach-1',
+          price: 30,
+          maxParticipants: 8,
+          skillLevel: 'beginner',
+          duration: '1',
+          schedule: 'Every Monday',
+          date: new Date(),
+          startTime: '09:00',
+          endTime: '10:00',
+          courtId: 'court1',
+          enrolled: 0,
+          participants: [],
+          status: 'scheduled',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      ];
+      console.log('Initializing with default clinics:', defaultClinics);
+      saveClinicToStorage(defaultClinics);
+      return defaultClinics;
+    }
     
     // Parse and ensure dates are properly handled
-    return JSON.parse(storedClinics).map((clinic: any) => ({
+    const clinics = JSON.parse(storedClinics).map((clinic: any) => ({
       ...clinic,
+      date: clinic.date ? new Date(clinic.date) : new Date(),
       createdAt: clinic.createdAt ? new Date(clinic.createdAt) : new Date(),
       updatedAt: clinic.updatedAt ? new Date(clinic.updatedAt) : new Date(),
-      date: clinic.date ? new Date(clinic.date) : new Date()
+      // Ensure participants is always an array
+      participants: Array.isArray(clinic.participants) ? clinic.participants : []
     }));
+    console.log('Parsed clinics:', clinics);
+    return clinics;
   } catch (error) {
     console.error('Error loading clinics from localStorage:', error);
     return [];
@@ -95,7 +128,45 @@ const saveClinicToStorage = (clinics: Clinic[]): boolean => {
   if (typeof window === 'undefined') return false;
   
   try {
+    console.log('Saving clinics to storage:', clinics);
     localStorage.setItem(CLINICS_STORAGE_KEY, JSON.stringify(clinics));
+    
+    // Update the window timeSlots with clinic slots
+    if (typeof window !== 'undefined') {
+      const currentSlots = (window as any).timeSlots || [];
+      const nonClinicSlots = currentSlots.filter((slot: any) => !slot.id?.startsWith('clinic-'));
+      const clinicSlots = clinics.map(clinic => ({
+        id: `clinic-${clinic.id}`,
+        courtId: clinic.courtId,
+        courtName: `Clinic: ${clinic.title}`,
+        date: typeof clinic.date === 'string' ? clinic.date : clinic.date.toISOString().split('T')[0],
+        startTime: clinic.startTime,
+        endTime: clinic.endTime,
+        available: false,
+        type: 'clinic',
+        clinicId: clinic.id,
+        clinicDetails: {
+          coachId: clinic.coachId,
+          coachName: coachDb.getCoachById(clinic.coachId)?.name || 'Unknown Coach',
+          title: clinic.title,
+          description: clinic.description,
+          price: clinic.price,
+          skillLevel: clinic.skillLevel,
+          maxParticipants: clinic.maxParticipants,
+          status: clinic.status,
+          enrolled: clinic.enrolled || 0,
+          participants: clinic.participants || []
+        }
+      }));
+      (window as any).timeSlots = [...nonClinicSlots, ...clinicSlots];
+      console.log('Updated window.timeSlots:', (window as any).timeSlots);
+      
+      // Trigger update event
+      window.dispatchEvent(new CustomEvent('timeSlotsUpdated', {
+        detail: { timeSlots: (window as any).timeSlots }
+      }));
+    }
+    
     return true;
   } catch (error) {
     console.error('Error saving clinics to localStorage:', error);

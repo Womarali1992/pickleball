@@ -35,14 +35,14 @@ const WeekViewDayColumn: React.FC<WeekViewDayColumnProps> = ({
     return (
         <div className="flex flex-col border-r last:border-r-0">
             {/* Day header */}
-            <div className="bg-gray-100 p-2 text-center border-b">
-                <div className="text-sm font-medium">{dayInfo.displayDate}</div>
+            <div className="bg-gray-100/80 p-3 text-center border-b border-gray-200">
+                <div className="text-sm font-semibold text-gray-700">{dayInfo.displayDate}</div>
             </div>
             
             {/* Time slots for the day */}
-            <div className="flex-1 overflow-y-auto p-1">
+            <div className="flex-1 overflow-y-auto p-2">
                 {slotsForDay.length > 0 ? (
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                         {slotsForDay.map((slot) => {
                             const hour = parseInt(slot.startTime.split(':')[0]);
                             const status = getStatus(court, dayInfo.date, hour);

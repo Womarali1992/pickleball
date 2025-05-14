@@ -15,6 +15,7 @@ import TimeSlotCell, { SlotStatus } from "./TimeSlotCell";
 import SchedulerNav from "./SchedulerNav";
 import { COLORS } from '@/lib/constants';
 import { useSchedulerStatus } from "@/hooks/useSchedulerStatus";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface SchedulerChartProps {
   courts: Court[];
@@ -22,13 +23,15 @@ interface SchedulerChartProps {
   reservations?: Reservation[];
   onScheduleCourt: (court: Court) => void;
   onDateSelect?: (date: Date) => void;
+  isAdmin?: boolean;
 }
 
-const SchedulerChart = ({ courts, timeSlots, reservations = [], onScheduleCourt, onDateSelect }: SchedulerChartProps) => {
+const SchedulerChart = ({ courts, timeSlots, reservations = [], onScheduleCourt, onDateSelect, isAdmin = false }: SchedulerChartProps) => {
   const [currentDate, setCurrentDate] = useState<Date>(startOfDay(new Date()));
   const [viewDays, setViewDays] = useState<number>(3);
   const [openPopoverId, setOpenPopoverId] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [schedulerMode, setSchedulerMode] = useState<'court' | 'clinic'>('court');
   const isMobile = useMediaQuery("(max-width: 768px)");
 
   // Add useEffect to handle mounting
@@ -77,6 +80,27 @@ const SchedulerChart = ({ courts, timeSlots, reservations = [], onScheduleCourt,
 
   return (
     <Card className="gradient-card overflow-hidden">
+      {isAdmin && (
+        <div className="border-b border-border/30">
+          <Tabs value={schedulerMode} onValueChange={(value) => setSchedulerMode(value as 'court' | 'clinic')}>
+            <TabsList className="w-full justify-start rounded-none border-b bg-transparent p-0">
+              <TabsTrigger
+                value="court"
+                className="rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary"
+              >
+                Court Schedule
+              </TabsTrigger>
+              <TabsTrigger
+                value="clinic"
+                className="rounded-none border-b-2 border-transparent px-4 py-2 data-[state=active]:border-primary"
+              >
+                Clinic Schedule
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+      )}
+      
       <SchedulerNav 
         currentDate={currentDate}
         onPreviousDay={previousDay}
@@ -155,6 +179,7 @@ const SchedulerChart = ({ courts, timeSlots, reservations = [], onScheduleCourt,
                         return (
                           <div key={`${day}-${hour}`} className={`flex items-center ${alignmentClass} w-full h-full px-0.5`}>
                             <TimeSlotCell
+                              key={`${court.id}-${day}-${hour}`}
                               court={court}
                               day={day}
                               hour={hour}
@@ -162,7 +187,34 @@ const SchedulerChart = ({ courts, timeSlots, reservations = [], onScheduleCourt,
                               popoverId={popoverId}
                               openPopoverId={openPopoverId}
                               togglePopover={togglePopover}
-                              onScheduleCourt={onScheduleCourt}
+                              onScheduleCourt={(court) => {
+                                // Prevent event propagation
+                                if (event) {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                }
+
+                                console.log('SchedulerChart: TimeSlotCell clicked:', { 
+                                  court, 
+                                  day, 
+                                  hour, 
+                                  isAdmin,
+                                  schedulerMode 
+                                });
+
+                                try {
+                                  // Pass the court object with all necessary information
+                                  onScheduleCourt({
+                                    ...court,
+                                    selectedTime: `${hour}:00`,
+                                    selectedDate: day,
+                                    isClinic: isAdmin && schedulerMode === 'clinic'
+                                  });
+                                } catch (error) {
+                                  console.error('Error in SchedulerChart:', error);
+                                }
+                              }}
+                              isAdmin={isAdmin}
                             />
                           </div>
                         );
@@ -175,7 +227,7 @@ const SchedulerChart = ({ courts, timeSlots, reservations = [], onScheduleCourt,
                       onClick={() => onScheduleCourt(court)}
                       className="w-full mt-2 text-xs h-7"
                     >
-                      Schedule
+                      {isAdmin && schedulerMode === 'clinic' ? 'Schedule Clinic' : 'Schedule'}
                     </Button>
                   </div>
                 ))}

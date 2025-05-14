@@ -32,11 +32,14 @@ const DayViewTimeSlot: React.FC<DayViewTimeSlotProps> = ({
 }) => {
 
     const isClinic = !!slotStatus.slot?.clinicDetails;
+    console.log('DayViewTimeSlot - Slot status:', slotStatus);
+    console.log('DayViewTimeSlot - Is clinic:', isClinic);
 
     // Determine background class based on status
     let bgClass = "";
     if (isClinic) {
         bgClass = `${COLORS.CLINIC.BG} ${COLORS.CLINIC.TEXT}`;
+        console.log('DayViewTimeSlot - Using clinic colors:', bgClass);
     // TODO: Add check for MY_BOOKING if needed
     } else if (slotStatus.available && !slotStatus.reserved) {
         bgClass = `${COLORS.AVAILABLE.BG} ${COLORS.AVAILABLE.TEXT}`;
@@ -45,6 +48,7 @@ const DayViewTimeSlot: React.FC<DayViewTimeSlotProps> = ({
     } else { // Blocked or unavailable
         bgClass = `${COLORS.BLOCKED.BG} ${COLORS.BLOCKED.TEXT}`;
     }
+    console.log('DayViewTimeSlot - Final background class:', bgClass);
 
     return (
         <Popover open={openPopoverId === popoverId} onOpenChange={() => togglePopover(popoverId)}>

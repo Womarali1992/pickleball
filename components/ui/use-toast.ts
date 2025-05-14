@@ -27,4 +27,13 @@ export const toast = ({ title, description, variant = 'default' }: ToastProps) =
     dismiss: () => {},
     update: (props: Partial<ToastProps>) => {}
   };
+};
+
+// Add useToast hook
+export const useToast = () => {
+  return {
+    toast,
+    toasts: [],
+    dismiss: (toastId?: string) => {},
+  };
 }; 

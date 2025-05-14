@@ -1,18 +1,20 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SchedulerChart from "@/components/SchedulerChart";
 import DayScheduleView from "@/components/DayScheduleView";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { getCourts, timeSlots, reservations } from "@/lib/data";
+import { getCourts, timeSlots as initialTimeSlots, reservations } from "@/lib/data";
 import { format, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, getDay } from "date-fns";
 import ScheduleCourtForm from "@/components/ScheduleCourtForm";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import ScheduleClinicForm from "@/components/coaches/ScheduleClinicForm";
+import { dbService } from "@/lib/db-service";
 
 // Define gradient colors for each day
 const DAY_GRADIENTS = {
@@ -32,13 +34,58 @@ export default function SchedulePage() {
   const [courtsList, setCourtsList] = useState(() => getCourts());
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [isMounted, setIsMounted] = useState(false);
+  const [isClinicSchedulingOpen, setIsClinicSchedulingOpen] = useState(false);
+  const [selectedClinicData, setSelectedClinicData] = useState<{
+    court: any;
+    date: Date;
+    timeSlot: string;
+  } | null>(null);
+  const [isAdmin] = useState(false);
+  const [timeSlots, setTimeSlots] = useState(() => initialTimeSlots);
 
   React.useEffect(() => {
     setIsMounted(true);
   }, []);
   
   const handleScheduleCourt = (court: any) => {
-    setSchedulingCourt(court);
+    console.log('SchedulePage: handleScheduleCourt called with:', { 
+      court, 
+      isAdmin,
+      selectedDate: court.selectedDate || selectedDate,
+      selectedTime: court.selectedTime
+    });
+    
+    if (isAdmin) {
+      const selectedDate = court.selectedDate || selectedDate;
+      const selectedTime = court.selectedTime || `${selectedDate.getHours()}:00`;
+      
+      console.log('SchedulePage: Opening clinic scheduling with:', {
+        court,
+        date: selectedDate,
+        timeSlot: selectedTime
+      });
+
+      setSelectedClinicData({
+        court,
+        date: selectedDate,
+        timeSlot: selectedTime
+      });
+      setIsClinicSchedulingOpen(true);
+    } else {
+      // Directly set the scheduling court without showing days form
+      setSchedulingCourt({
+        ...court,
+        selectedDate: court.selectedDate || selectedDate,
+        selectedTime: court.selectedTime || `${selectedDate.getHours()}:00`
+      });
+    }
+  };
+
+  const handleScheduleClinic = async (date: Date, timeSlots: string[], courtId: string) => {
+    console.log('SchedulePage: handleScheduleClinic called with:', { date, timeSlots, courtId });
+    // Here you would implement the logic to create a new clinic
+    setIsClinicSchedulingOpen(false);
+    setSelectedClinicData(null);
   };
 
   const handleDateSelect = (date: Date) => {
@@ -82,6 +129,49 @@ export default function SchedulePage() {
     <div key={`empty-${index}`} className="h-24 border border-border/40 bg-background/50"></div>
   ));
 
+  // Add useEffect to monitor state changes
+  React.useEffect(() => {
+    console.log('SchedulePage state updated:', {
+      isClinicSchedulingOpen,
+      selectedClinicData,
+      isAdmin
+    });
+  }, [isClinicSchedulingOpen, selectedClinicData, isAdmin]);
+
+  useEffect(() => {
+    // Load clinics and update time slots
+    const loadClinics = () => {
+      try {
+        console.log('Loading clinics in SchedulePage');
+        const updatedClinicSlots = dbService.updateClinicTimeSlots();
+        console.log('Updated clinic slots:', updatedClinicSlots);
+        
+        // Update time slots with clinic slots
+        const currentSlots = timeSlots;
+        const nonClinicSlots = currentSlots.filter(slot => !slot.id?.startsWith('clinic-'));
+        const combinedSlots = [...nonClinicSlots, ...updatedClinicSlots];
+        console.log('Combined slots:', combinedSlots);
+        setTimeSlots(combinedSlots);
+      } catch (error) {
+        console.error('Error loading clinics:', error);
+      }
+    };
+    
+    loadClinics();
+    
+    // Listen for time slots updates
+    const handleTimeSlotsUpdate = (event: CustomEvent) => {
+      console.log('Time slots update event received:', event.detail);
+      setTimeSlots(event.detail.timeSlots);
+    };
+    
+    window.addEventListener('timeSlotsUpdated', handleTimeSlotsUpdate as EventListener);
+    
+    return () => {
+      window.removeEventListener('timeSlotsUpdated', handleTimeSlotsUpdate as EventListener);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <Header />
@@ -96,18 +186,31 @@ export default function SchedulePage() {
         </div>
 
         <div className="grid grid-cols-7 gap-2 mb-4">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
-            <Card
-              key={day}
-              className="cursor-pointer transition-all hover:shadow-md"
-            >
-              <CardContent className={`p-2 text-center bg-gradient-to-br ${DAY_GRADIENTS[index as keyof typeof DAY_GRADIENTS]} text-white rounded-md`}>
-                <div className="text-xs font-medium text-white">
-                  {day}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => {
+            // Calculate the date for this day of the week
+            const today = new Date();
+            const currentDayOfWeek = today.getDay();
+            const diff = index - currentDayOfWeek;
+            const date = new Date(today);
+            date.setDate(today.getDate() + diff);
+            
+            return (
+              <Card
+                key={day}
+                className="cursor-pointer transition-all hover:shadow-md"
+                onClick={() => {
+                  setSelectedDate(date);
+                  setViewMode("day");
+                }}
+              >
+                <CardContent className={`p-2 text-center bg-gradient-to-br ${DAY_GRADIENTS[index as keyof typeof DAY_GRADIENTS]} text-white rounded-md`}>
+                  <div className="text-xs font-medium text-white">
+                    {day}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         <div className="flex justify-between items-center mb-6">
@@ -132,6 +235,7 @@ export default function SchedulePage() {
                 reservations={reservations}
                 onScheduleCourt={handleScheduleCourt}
                 onDateSelect={handleDateSelect}
+                isAdmin={isAdmin}
               />
             </TabsContent>
 
@@ -142,6 +246,7 @@ export default function SchedulePage() {
                 reservations={reservations}
                 onScheduleCourt={handleScheduleCourt}
                 onDateSelect={setSelectedDate}
+                isAdmin={isAdmin}
               />
             </TabsContent>
 
@@ -235,9 +340,58 @@ export default function SchedulePage() {
             <DialogContent>
               <ScheduleCourtForm
                 court={schedulingCourt}
-                isOpen={!!schedulingCourt}
-                onClose={() => setSchedulingCourt(null)}
-                onSave={handleScheduleCourt}
+                selectedDate={schedulingCourt.selectedDate}
+                onSubmit={(data) => {
+                  console.log('Booking data:', data);
+                  // Handle the booking submission here
+                  setSchedulingCourt(null);
+                }}
+                onCancel={() => setSchedulingCourt(null)}
+              />
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Clinic Scheduling Dialog */}
+        {selectedClinicData && (
+          <Dialog 
+            open={isClinicSchedulingOpen} 
+            onOpenChange={(open) => {
+              console.log('SchedulePage: Dialog onOpenChange:', open);
+              if (!open) {
+                setIsClinicSchedulingOpen(false);
+                setSelectedClinicData(null);
+              }
+            }}
+          >
+            <DialogContent className="max-w-2xl">
+              <ScheduleClinicForm
+                isOpen={isClinicSchedulingOpen}
+                onClose={() => {
+                  console.log('SchedulePage: Closing clinic form');
+                  setIsClinicSchedulingOpen(false);
+                  setSelectedClinicData(null);
+                }}
+                clinic={{
+                  id: 'new-clinic',
+                  title: 'New Clinic',
+                  description: '',
+                  coachId: '', // You'll need to set this based on your requirements
+                  price: 0,
+                  maxParticipants: 8,
+                  skillLevel: 'beginner',
+                  duration: 60,
+                  schedule: '',
+                  date: selectedClinicData.date,
+                  startTime: selectedClinicData.timeSlot,
+                  endTime: `${parseInt(selectedClinicData.timeSlot.split(':')[0]) + 1}:00`,
+                  courtId: selectedClinicData.court.id,
+                  enrolled: 0,
+                  participants: [],
+                  status: 'scheduled'
+                }}
+                courts={courtsList}
+                onSchedule={handleScheduleClinic}
               />
             </DialogContent>
           </Dialog>

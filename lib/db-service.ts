@@ -132,16 +132,20 @@ class ReservationDB {
       // Get all clinics from the coach database
       const allClinics: Clinic[] = [];
       const coaches = coachDb.getAllCoaches();
+      console.log('Updating clinic time slots with coaches:', coaches);
       
       // For each coach, get their clinics
       coaches.forEach(coach => {
         const coachClinics = coachDb.getClinicsByCoachId(coach.id);
+        console.log(`Clinics for coach ${coach.name}:`, coachClinics);
         if (coachClinics && coachClinics.length > 0) {
           // Only include scheduled clinics
           const scheduledClinics = coachClinics.filter(clinic => clinic.status === 'scheduled');
           allClinics.push(...scheduledClinics);
         }
       });
+      
+      console.log('All scheduled clinics:', allClinics);
       
       // Convert clinics to time slots (marked as unavailable)
       this.clinicSlots = allClinics.map(clinic => {
@@ -159,7 +163,7 @@ class ReservationDB {
         const coach = coachDb.getCoachById(clinic.coachId);
         const coachName = coach ? coach.name : 'Unknown Coach';
 
-        return {
+        const timeSlot = {
           id: slotId,
           courtId: clinic.courtId,
           courtName: `Clinic: ${clinic.title}`,
@@ -182,16 +186,20 @@ class ReservationDB {
             participants: clinic.participants || []
           }
         };
+        console.log('Created clinic time slot:', timeSlot);
+        return timeSlot;
       });
       
       // Save to localStorage
       setItem(CLINIC_SLOTS_KEY, this.clinicSlots);
+      console.log('Saved clinic slots to localStorage:', this.clinicSlots);
       
       // Update the window timeSlots with clinic slots
       if (typeof window !== 'undefined') {
         const currentSlots = (window as any).timeSlots || [];
         const nonClinicSlots = currentSlots.filter((slot: any) => !slot.id?.startsWith('clinic-'));
         (window as any).timeSlots = [...nonClinicSlots, ...this.clinicSlots];
+        console.log('Updated window.timeSlots:', (window as any).timeSlots);
         
         // Trigger update event
         window.dispatchEvent(new CustomEvent('timeSlotsUpdated', {

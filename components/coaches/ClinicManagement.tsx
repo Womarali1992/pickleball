@@ -25,6 +25,7 @@ export default function ClinicManagement({ coaches, onUpdate }: ClinicManagement
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedClinic, setSelectedClinic] = useState<Clinic | null>(null);
+  
   const [newClinic, setNewClinic] = useState<Partial<Clinic>>({
     title: '',
     description: '',
@@ -32,7 +33,7 @@ export default function ClinicManagement({ coaches, onUpdate }: ClinicManagement
     price: 0,
     maxParticipants: 8,
     skillLevel: 'beginner',
-    duration: '2 hours',
+    duration: '1',
     schedule: '',
     date: new Date(),
     startTime: '09:00',
@@ -44,14 +45,28 @@ export default function ClinicManagement({ coaches, onUpdate }: ClinicManagement
   });
 
   useEffect(() => {
-    loadClinics();
-  }, []);
+    if (coaches && coaches.length > 0) {
+      loadClinics();
+    }
+  }, [coaches]);
 
   const loadClinics = () => {
+    if (!coaches || coaches.length === 0) return;
+    
     const allClinics = coaches.flatMap(coach => 
       coachDb.getClinicsByCoachId(coach.id)
     );
     setClinics(allClinics);
+  };
+
+  const calculateEndTime = (startTime: string, durationHours: string) => {
+    const [hours, minutes] = startTime.split(':').map(Number);
+    const durationInHours = parseInt(durationHours);
+    
+    let endHours = hours + durationInHours;
+    if (endHours > 23) endHours = 23;
+    
+    return `${endHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
   const handleAddClinic = async (e: React.FormEvent) => {
@@ -69,8 +84,7 @@ export default function ClinicManagement({ coaches, onUpdate }: ClinicManagement
         enrolled: 0,
         participants: [],
         date: new Date(),
-        startTime: '09:00',
-        endTime: '10:00',
+        endTime: calculateEndTime(newClinic.startTime || '09:00', newClinic.duration || '1'),
         courtId: 'court1',
         status: 'scheduled',
         createdAt: new Date(),
@@ -88,7 +102,7 @@ export default function ClinicManagement({ coaches, onUpdate }: ClinicManagement
           price: 0,
           maxParticipants: 8,
           skillLevel: 'beginner',
-          duration: '2 hours',
+          duration: '1',
           schedule: '',
           date: new Date(),
           startTime: '09:00',
@@ -256,11 +270,15 @@ export default function ClinicManagement({ coaches, onUpdate }: ClinicManagement
                   <SelectValue placeholder="Select a coach" />
                 </SelectTrigger>
                 <SelectContent>
-                  {coaches.map((coach) => (
-                    <SelectItem key={coach.id} value={coach.id}>
-                      {coach.name}
-                    </SelectItem>
-                  ))}
+                  {coaches && coaches.length > 0 ? (
+                    coaches.map((coach) => (
+                      <SelectItem key={coach.id} value={coach.id}>
+                        {coach.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="" disabled>No coaches available</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -301,11 +319,40 @@ export default function ClinicManagement({ coaches, onUpdate }: ClinicManagement
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="duration">Duration</Label>
-              <Input
-                id="duration"
+              <Label htmlFor="duration">Duration (Hours)</Label>
+              <Select
                 value={newClinic.duration}
-                onChange={(e) => setNewClinic(prev => ({ ...prev, duration: e.target.value }))}
+                onValueChange={(value) => {
+                  setNewClinic(prev => ({
+                    ...prev,
+                    duration: value,
+                    endTime: calculateEndTime(prev.startTime || '09:00', value)
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select duration" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 Hour</SelectItem>
+                  <SelectItem value="2">2 Hours</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="startTime">Start Time</Label>
+              <Input
+                id="startTime"
+                type="time"
+                value={newClinic.startTime}
+                onChange={(e) => {
+                  const newStartTime = e.target.value;
+                  setNewClinic(prev => ({
+                    ...prev,
+                    startTime: newStartTime,
+                    endTime: calculateEndTime(newStartTime, prev.duration || '1')
+                  }));
+                }}
                 required
               />
             </div>
@@ -328,45 +375,6 @@ export default function ClinicManagement({ coaches, onUpdate }: ClinicManagement
                 onChange={(e) => setNewClinic(prev => ({ ...prev, date: new Date(e.target.value) }))}
                 required
               />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="startTime">Start Time</Label>
-                <Input
-                  id="startTime"
-                  type="time"
-                  value={newClinic.startTime}
-                  onChange={(e) => setNewClinic(prev => ({ ...prev, startTime: e.target.value }))}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="endTime">End Time</Label>
-                <Input
-                  id="endTime"
-                  type="time"
-                  value={newClinic.endTime}
-                  onChange={(e) => setNewClinic(prev => ({ ...prev, endTime: e.target.value }))}
-                  required
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="court">Court</Label>
-              <Select
-                value={newClinic.courtId}
-                onValueChange={(value) => setNewClinic(prev => ({ ...prev, courtId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a court" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="court1">Court 1</SelectItem>
-                  <SelectItem value="court2">Court 2</SelectItem>
-                  <SelectItem value="court3">Court 3</SelectItem>
-                  <SelectItem value="court4">Court 4</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <DialogFooter>
               <Button type="submit">Add Clinic</Button>

@@ -147,6 +147,8 @@ export default function WeekViewCourt({
     );
   };
 
+  console.log('WeekViewCourt - Rendering with:', { court, timeSlots, reservations });
+
   return (
     <div className={`w-full ${aspectRatio} order-2 mb-6`}>
       <div className="h-full flex flex-col">

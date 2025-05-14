@@ -87,23 +87,95 @@ export default function AdminPage() {
     const loadedCourts = loadCourts();
     setCourtsList(loadedCourts);
     
+    // Initialize some default coaches if none exist
+    const allCoaches = coachDb.getAllCoaches();
+    console.log('Initial load of coaches:', allCoaches);
+    if (allCoaches.length === 0) {
+      // Add some default coaches
+      const defaultCoaches = [
+        {
+          id: 'coach-1',
+          name: 'John Smith',
+          email: 'john.smith@example.com',
+          phoneNumber: '555-0123',
+          bio: 'Professional pickleball coach with 10 years of experience',
+          specialties: ['Beginner Training', 'Advanced Strategy'],
+          rating: 4.8,
+          status: 'active'
+        },
+        {
+          id: 'coach-2',
+          name: 'Sarah Johnson',
+          email: 'sarah.j@example.com',
+          phoneNumber: '555-0124',
+          bio: 'Former tennis pro turned pickleball enthusiast and coach',
+          specialties: ['Tournament Prep', 'Youth Training'],
+          rating: 4.9,
+          status: 'active'
+        }
+      ];
+
+      defaultCoaches.forEach(coach => {
+        console.log('Creating default coach:', coach);
+        coachDb.createCoach(coach);
+      });
+      
+      // Add some default clinics
+      const defaultClinics = [
+        {
+          id: 'clinic-1',
+          title: 'Beginner Workshop',
+          description: 'Introduction to pickleball basics',
+          coachId: 'coach-1',
+          price: 30,
+          maxParticipants: 8,
+          skillLevel: 'beginner',
+          duration: '1',
+          schedule: 'Every Monday',
+          date: new Date(),
+          startTime: '09:00',
+          endTime: '10:00',
+          courtId: 'court1',
+          enrolled: 0,
+          participants: [],
+          status: 'scheduled'
+        }
+      ];
+
+      defaultClinics.forEach(clinic => {
+        console.log('Creating default clinic:', clinic);
+        coachDb.createClinic(clinic);
+      });
+      
+      // Reload coaches after adding defaults
+      const updatedCoaches = coachDb.getAllCoaches();
+      console.log('Coaches after adding defaults:', updatedCoaches);
+      setCoaches(updatedCoaches);
+    } else {
+      setCoaches(allCoaches);
+    }
+    
+    // Update time slots with clinic slots
+    const updatedClinicSlots = dbService.updateClinicTimeSlots();
+    console.log('Updated clinic slots:', updatedClinicSlots);
+    
     const generatedTimeSlots = generateTimeSlots(loadedCourts);
+    const nonClinicSlots = generatedTimeSlots.filter(slot => !slot.id?.startsWith('clinic-'));
+    const combinedSlots = [...nonClinicSlots, ...updatedClinicSlots];
+    console.log('Combined slots:', combinedSlots);
+    setTimeSlots(combinedSlots);
     
-    const filteredTimeSlots = generatedTimeSlots.filter(slot => {
-      return !specialTimeSlots.some(specialSlot => 
-        specialSlot.courtId === slot.courtId && 
-        specialSlot.date === slot.date && 
-        (specialSlot.startTime === slot.startTime || 
-         parseInt(specialSlot.startTime) === parseInt(slot.startTime))
-      );
-    });
+    // Listen for time slots updates
+    const handleTimeSlotsUpdate = (event: CustomEvent) => {
+      console.log('Time slots update event received:', event.detail);
+      setTimeSlots(event.detail.timeSlots);
+    };
     
-    const combinedTimeSlots = [
-      ...filteredTimeSlots,
-      ...specialTimeSlots
-    ];
+    window.addEventListener('timeSlotsUpdated', handleTimeSlotsUpdate as EventListener);
     
-    setTimeSlots(combinedTimeSlots);
+    return () => {
+      window.removeEventListener('timeSlotsUpdated', handleTimeSlotsUpdate as EventListener);
+    };
   }, []);
   
   useEffect(() => {
@@ -1266,10 +1338,12 @@ export default function AdminPage() {
           </TabsContent>
           
           <TabsContent value="clinics" className="space-y-4">
+            {console.log('Rendering ClinicManagement with coaches:', coaches)}
             <ClinicManagement 
               coaches={coaches}
               onUpdate={() => {
                 const allCoaches = coachDb.getAllCoaches();
+                console.log('Updated coaches:', allCoaches);
                 setCoaches(allCoaches);
               }}
             />
